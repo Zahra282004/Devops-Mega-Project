@@ -1,4 +1,5 @@
-@Library("Shared_lib") _
+//CI Pipeline
+// @Library("Shared_lib") _
 
 pipeline{
   agent any
@@ -15,32 +16,76 @@ pipeline{
   stages{
     
     stage("Git Checkout"){
+      steps{
       git url:"https://github.com/DevMadhup/Wanderlust-Mega-Project.git",branch:"main
+    }
     }
     
     stage("Trivy filesystem check"){
-      $ trivy fs .
+      steps{
+        $ trivy fs .
+    }
     }
     
     stage("Owasp dependency checks"){
+      steps{
       //Scans requirements.txt/package.json 
-            dependencyCheck odcInstallation: 'OWASP', additionalArguments: '--scan ./'
-            
+            dependencyCheck odcInstallation: 'OWASP', additionalArguments: '--scan ./'       
       // Report generation
             dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
     }
+    }
     
     stage("Sonarqube code analysis"){
-       withSonarQubeEnv("Sonar-Server"){
-       sh "$SONAR_HOME/bin/sonar-scanner -Dsonar.projectName="wanderlust-app" -Dsonar.projectKey="wanderlust -X"
+       steps{
+         withSonarQubeEnv("Sonar-Server"){
+         sh "$SONAR_HOME/bin/sonar-scanner -Dsonar.projectName="wanderlust-app" -Dsonar.projectKey="wanderlust -X"
   }
     }
+  }
+  
+   stage("Sonarqube code quality gates"){
+     steps{
+     //if code is of bad quality,stop the pipeine
+      timeout(time: 1, unit: "MINUTES"){
+      waitForQualityGate abortPipeline: true
+  }
+   }
+   }
     
-    stage("Docker image create"){
-      
+    stage("Docker: Build Images"){
+            steps{
+              dir('backend'){
+                 sh "docker build -t zahramurtaza/wanderlust-backend:${BACKEND_IMAGE_TAG} ."
+              }
+              dir('frontend'){
+                 sh "docker build -t zahramurtaza/wanderlust-frontend:${FRONTEND_IMAGE_TAG} ."
+              }
+    }
+    }
+
+    stage("Scan images with trivy){
+          steps{
+            trivy image "zahramurtaza/wanderlust-backend:${BACKEND_IMAGE_TAG}"
+            trivy image "zahramurtaza/wanderlust-backend:${BACKEND_IMAGE_TAG}"
+          }
     }
     stage("Push to Dockerhub"){
-      
+       sh "docker push zahramurtaza/wanderlust-backend:${BACKEND_IMAGE_TAG} "
+       sh "docker push zahramurtaza/wanderlust-frontend:${FRONTEND_IMAGE_TAG} "
     }
-  }
+    }
+          
+    post{
+        success{
+          // after success of pipeline,do not delete the artifacts(report files created during this pipeline)
+            archiveArtifacts artifacts: '*.xml', followSymlinks: false
+          //start cd pipeline build and provide parameters
+            build job: "Wanderlust-CD", parameters: [
+                string(name: 'FRONTEND_DOCKER_TAG', value: "${params.FRONTEND_DOCKER_TAG}"),
+                string(name: 'BACKEND_DOCKER_TAG', value: "${params.BACKEND_DOCKER_TAG}")
+            ]
+        }
+    }
+  
 }
