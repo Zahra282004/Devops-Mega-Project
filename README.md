@@ -122,4 +122,4 @@ kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
 ```
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
 ```
-* Note:the argocd is installed through master node in the cluster and runs on worker nodes on a specific node provided after patching it to 'NodePort'
+* Note:the argocd is installed through master node in the cluster and runs on worker nodes on a specific port provided after patching it to 'NodePort'
