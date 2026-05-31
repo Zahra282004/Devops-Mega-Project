@@ -58,6 +58,10 @@ eksctl create nodegroup --cluster=wanderlust \
                      --ssh-public-key=eks-nodegroup-key
 ```
 # 5: Install docker (image build)
+- Provide permission to docker socket so that docker build and push command do not fail 
+```
+chmod 777 /var/run/docker.sock
+```
 # 6: Install and configure SonarQube (static code analysis)
 # 7: Install Trivy(vulnerabilities and file system detection)
 # 8: Setup Gmail
@@ -110,7 +114,7 @@ sudo chmod +x /usr/local/bin/argocd
 ```
 kubectl get svc -n argocd
 ```
-- Change argocd server's service (patch) from ClusterIP to NodePort(providing one of the worker nodes public ip)
+- Change argocd server's service (patch) from ClusterIP to NodePort(kubernetes provides a port between a specific range on which our app is can run on our worker nodes)
 ```
 kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
 ```
@@ -123,3 +127,79 @@ kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
 ```
 * Note:the argocd is installed through master node in the cluster and runs on worker nodes on a specific port provided after patching it to 'NodePort'
+
+# 13: Go to Master Machine and add our own eks cluster to argocd for application deployment using cli
+- Login to argoCD from CLI
+ ```
+argocd login 52.53.156.187:32738 --username admin
+```
+- Check how many clusters are available in argocd
+```
+argocd cluster list
+```
+- Get your cluster name
+```
+kubectl config get-contexts
+```
+- Add your cluster to argocd
+```
+argocd cluster add Wanderlust@wanderlust.us-west-1.eksctl.io --name wanderlust-eks-cluster
+```
+- Once your cluster is added to argocd, go to argocd console Settings --> Clusters and verify it
+- Go to Settings --> Repositories and click on Connect repo and add your git repo url
+- Now, go to Applications and click on New App and create your app
+
+# 14: monitoring EKS cluster, kubernetes components and workloads using prometheus and grafana via HELM (On Master machine)
+- Install Helm Chart
+```
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+chmod 700 get_helm.sh
+./get_helm.sh
+```
+- Add Helm Stable Charts for Your Local Client
+```
+helm repo add stable https://charts.helm.sh/stable
+```
+- Add Prometheus(Grafana included) Helm Repository
+```
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+```
+- Create Prometheus Namespace
+```
+kubectl create namespace prometheus
+kubectl get ns
+```
+- Install Prometheus using Helm
+```
+helm install stable prometheus-community/kube-prometheus-stack -n prometheus
+```
+- Verify prometheus installation
+```
+kubectl get pods -n prometheus
+```
+- Check the services file (svc) of the Prometheus
+```
+kubectl get svc -n prometheus
+```
+- Expose Prometheus and Grafana to the external world through Node Port
+```
+kubectl edit svc stable-kube-prometheus-sta-prometheus -n prometheus
+kubectl get svc -n prometheus
+```
+- change the SVC file of the Grafana and expose it to the outer world
+```
+kubectl edit svc stable-grafana -n prometheus
+```
+- Check grafana service
+```
+kubectl get svc -n prometheus
+```
+- Get a password for grafana and login to the account on browser
+```
+kubectl get secret --namespace prometheus stable-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+```
+# 15: Clean Up
+- Delete eks cluster
+```
+eksctl delete cluster --name=wanderlust --region=us-west-1
+``
