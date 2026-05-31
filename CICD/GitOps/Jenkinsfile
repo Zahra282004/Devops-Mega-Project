@@ -49,7 +49,7 @@ pipeline{
             steps{
                 script{
                     withCredentials([gitUsernamePassword(credentialsId: 'Github-cred', gitToolName: 'Default')]) {
-                        sh '''
+                        sh """
                         echo "Checking repository status: "
                         git status
                     
@@ -61,11 +61,12 @@ pipeline{
                         
                         echo "Pushing changes to github: "
                         git push https://github.com/DevMadhup/Wanderlust-Mega-Project.git main
-                    '''
+                    """
                     }
                 }
             }
      }
+  }
     
  post {
         success {
